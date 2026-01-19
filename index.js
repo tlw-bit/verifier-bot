@@ -106,6 +106,22 @@ client.on("messageCreate", async (msg) => {
   if (cmd === "ping") {
     return msg.reply("pong ✅");
   }
+client.on("messageCreate", async (msg) => {
+  if (msg.author.bot) return;
+  if (!msg.guild) return;
+  if (!msg.content.startsWith(PREFIX)) return;
+
+  const args = msg.content.slice(PREFIX.length).trim().split(/\s+/);
+  const cmd = (args.shift() || "").toLowerCase();
+
+  console.log("CMD:", cmd, "FROM:", msg.author.tag, "IN:", msg.channel?.name);
+
+  // ---- PING (test) ----
+  if (cmd === "ping") {
+    return msg.reply("pong ✅");
+  }
+
+  // 👇 PUT !getcode RIGHT HERE
 
   // ---- VERIFY INSTRUCTIONS (posts embed + image, then pins) ----
      if (cmd === "verifymsg") {
@@ -209,5 +225,6 @@ client.on("messageCreate", async (msg) => {
 
 // ====== LOGIN ======
 client.login(process.env.DISCORD_TOKEN).catch(console.error);
+
 
 
