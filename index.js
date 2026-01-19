@@ -121,7 +121,32 @@ client.on("messageCreate", async (msg) => {
     return msg.reply("pong ✅");
   }
 
-  // 👇 PUT !getcode RIGHT HERE
+  // ---- GETCODE (DMs user a code) ----
+  if (cmd === "getcode") {
+    // Optional: force it to be used in the verify channel
+    if (VERIFY_CHANNEL_ID && msg.channel.id !== VERIFY_CHANNEL_ID) {
+      return msg.reply("❌ Please use `!getcode` in the verification channel.");
+    }
+
+    const code = makeCode();
+    pending.set(msg.author.id, code);
+
+    try {
+      await msg.author.send(
+        `🔐 Your verification code is: **${code}**\n\n` +
+        `1) Put this in your Habbo motto\n` +
+        `2) Wait 10–30 seconds\n` +
+        `3) Come back and type: \`!verify YourHabboName\``
+      );
+      return msg.reply("✅ I’ve DM’d you your code. Check your messages!");
+    } catch {
+      return msg.reply(
+        `❌ I couldn’t DM you (your DMs might be closed).\n` +
+        `Your code is: **${code}**\n` +
+        `Put it in your Habbo motto, then run: \`!verify YourHabboName\``
+      );
+    }
+  }
 
   // ---- VERIFY INSTRUCTIONS (posts embed + image, then pins) ----
      if (cmd === "verifymsg") {
@@ -225,6 +250,7 @@ client.on("messageCreate", async (msg) => {
 
 // ====== LOGIN ======
 client.login(process.env.DISCORD_TOKEN).catch(console.error);
+
 
 
 
