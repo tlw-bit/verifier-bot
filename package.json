@@ -1,4 +1,4 @@
-{ web: npm start
+{
   "name": "habboverify-simple",
   "version": "1.0.0",
   "main": "index.js",
