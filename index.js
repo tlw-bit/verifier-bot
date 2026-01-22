@@ -20,8 +20,27 @@ const OLD_ROLE_TO_REMOVE = "Unverified";
 const VERIFY_CHANNEL_ID = "1462386529765691473";
 const LOG_CHANNEL_ID = "1456955298597175391";
 const WELCOME_CHANNEL_ID = "1456962809425559613";
-
 // ====================
+// ====== INVITE TRACKING STORAGE ======
+const INVITES_FILE = path.join(__dirname, "invites.json");
+
+function loadInvitesData() {
+  if (!fs.existsSync(INVITES_FILE)) return { counts: {} };
+  try {
+    const parsed = JSON.parse(fs.readFileSync(INVITES_FILE, "utf8"));
+    if (!parsed.counts) parsed.counts = {};
+    return parsed;
+  } catch {
+    return { counts: {} };
+  }
+}
+
+function saveInvitesData(obj) {
+  fs.writeFileSync(INVITES_FILE, JSON.stringify(obj, null, 2), "utf8");
+}
+
+let invitesData = loadInvitesData();
+// ===================================
 
 // userId -> code
 const pending = new Map();
@@ -80,37 +99,96 @@ function leaveEmbed(member) {
     )
     .setTimestamp();
 }
-
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMessages,
     GatewayIntentBits.MessageContent,
-    GatewayIntentBits.GuildMembers
-  ]
+    GatewayIntentBits.GuildMembers,
+  ],
 });
 
-// ====== JOIN / LEAVE LOGS ======
-client.on("guildMemberAdd", (member) => {
-  sendLogEmbed(member.guild, joinEmbed(member));
-});
+// ====== INVITE CACHE (guildId -> Map(code -> uses)) ======
+const invitesCache = new Map();
 
-client.on("guildMemberRemove", (member) => {
-  sendLogEmbed(member.guild, leaveEmbed(member));
-});
-client.on("guildMemberAdd", async (member) => {
+async function cacheGuildInvites(guild) {
   try {
-    const welcomeChannelId = "1456962809425559613";
-    const verifyChannelId = "1462386529765691473";
+    const invites = await guild.invites.fetch();
+    const map = new Map();
+    invites.forEach((inv) => map.set(inv.code, inv.uses ?? 0));
+    invitesCache.set(guild.id, map);
+  } catch (e) {
+    console.warn("⚠️ Could not fetch invites for guild:", guild.id, e?.message || e);
+  }
+}
 
-    const welcomeChannel = await member.guild.channels.fetch(welcomeChannelId).catch(() => null);
+// Keep cache updated when invites change
+client.on("inviteCreate", async (invite) => {
+  if (!invite.guild) return;
+  await cacheGuildInvites(invite.guild);
+});
+
+client.on("inviteDelete", async (invite) => {
+  if (!invite.guild) return;
+  await cacheGuildInvites(invite.guild);
+});
+
+// ====== JOIN / LEAVE + INVITE DETECTION + WELCOME ======
+client.on("guildMemberAdd", async (member) => {
+  // 1) Join log
+  sendLogEmbed(member.guild, joinEmbed(member));
+
+  // 2) Detect inviter by comparing invite uses
+  let inviterId = null;
+  let inviteCodeUsed = null;
+
+  try {
+    const before = invitesCache.get(member.guild.id) || new Map();
+
+    const invites = await member.guild.invites.fetch();
+    const after = new Map();
+    invites.forEach((inv) => after.set(inv.code, inv.uses ?? 0));
+
+    let usedInvite = null;
+    for (const inv of invites.values()) {
+      const prevUses = before.get(inv.code) ?? 0;
+      const nowUses = inv.uses ?? 0;
+      if (nowUses > prevUses) {
+        usedInvite = inv;
+        break;
+      }
+    }
+
+    // Update cache no matter what
+    invitesCache.set(member.guild.id, after);
+
+    if (usedInvite?.inviter?.id) {
+      inviterId = usedInvite.inviter.id;
+      inviteCodeUsed = usedInvite.code;
+
+      // Persist leaderboard counts
+      invitesData.counts[inviterId] = (invitesData.counts[inviterId] || 0) + 1;
+      saveInvitesData(invitesData);
+    }
+  } catch (e) {
+    console.warn("⚠️ Invite detection failed:", e?.message || e);
+  }
+
+  // 3) Welcome message (with inviter)
+  try {
+    const welcomeChannel = await member.guild.channels.fetch(WELCOME_CHANNEL_ID).catch(() => null);
     if (!welcomeChannel || !welcomeChannel.isTextBased()) return;
+
+    const invitedLine = inviterId
+      ? `👤 **Invited by:** <@${inviterId}>${inviteCodeUsed ? ` (code: \`${inviteCodeUsed}\`)` : ""}`
+      : `👤 **Invited by:** _(unknown)_`;
 
     const embed = new EmbedBuilder()
       .setTitle("👋 Welcome!")
       .setDescription(
         `Welcome to the server, <@${member.id}>!\n\n` +
-        `Please head to <#${verifyChannelId}> to verify and get started.`
+          `${invitedLine}\n\n` +
+          `Please head to <#${VERIFY_CHANNEL_ID}> to verify and get started.`
       )
       .setColor(0x2ecc71)
       .setThumbnail(member.user.displayAvatarURL())
@@ -119,17 +197,27 @@ client.on("guildMemberAdd", async (member) => {
     await welcomeChannel.send({
       content: `<@${member.id}>`,
       embeds: [embed],
-      allowedMentions: { users: [member.id] },
-    }).catch(() => {});
+      allowedMentions: { users: inviterId ? [member.id, inviterId] : [member.id] },
+    });
   } catch (err) {
-    console.error("guildMemberAdd error:", err?.stack || err);
+    console.error("welcome send error:", err?.message || err);
   }
 });
 
-// ====== READY ======
-client.once("ready", () => {
-  console.log(`✅ Logged in as ${client.user.tag}`);
+client.on("guildMemberRemove", (member) => {
+  sendLogEmbed(member.guild, leaveEmbed(member));
 });
+
+// ====== READY ======
+client.once("ready", async () => {
+  console.log(`✅ Logged in as ${client.user.tag}`);
+
+  // cache invites for all guilds the bot is in
+  for (const guild of client.guilds.cache.values()) {
+    await cacheGuildInvites(guild);
+  }
+});
+
 
 // ====== COMMANDS ======
 client.on("messageCreate", async (msg) => {
@@ -143,10 +231,40 @@ client.on("messageCreate", async (msg) => {
 
     console.log("CMD:", cmd, "FROM:", msg.author.tag, "IN:", msg.channel?.name);
 
-    // ---- PING (test) ----
+      // ---- PING (test) ----
     if (cmd === "ping") {
       return msg.reply("pong ✅");
     }
+
+    // ---- INVITES (check count) ----
+    if (cmd === "invites") {
+      const user = msg.mentions.users.first() || msg.author;
+      const count = invitesData.counts[user.id] || 0;
+      return msg.reply(`📨 <@${user.id}> has **${count}** invite(s).`);
+    }
+
+    // ---- INVITE LEADERBOARD ----
+    if (cmd === "invleaderboard" || cmd === "inviteleaderboard") {
+      const entries = Object.entries(invitesData.counts || {})
+        .map(([uid, count]) => ({ uid, count: Number(count) || 0 }))
+        .filter((x) => x.count > 0)
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 25);
+
+      if (!entries.length) return msg.reply("No invites tracked yet.");
+
+      const lines = entries.map((x, i) => `**${i + 1}.** <@${x.uid}> — **${x.count}**`);
+
+      const embed = new EmbedBuilder()
+        .setTitle("🏆 Invite Leaderboard")
+        .setDescription(lines.join("\n"))
+        .setColor(0x5865F2)
+        .setTimestamp();
+
+      return msg.reply({ embeds: [embed] });
+    }
+
+
 
     // ---- GETCODE (DMs the user their code) ----
     if (cmd === "getcode") {
@@ -270,5 +388,6 @@ if (!token) {
   process.exit(1);
 }
 client.login(token).catch(console.error);
+
 
 
