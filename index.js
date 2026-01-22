@@ -96,6 +96,33 @@ client.on("guildMemberAdd", (member) => {
 client.on("guildMemberRemove", (member) => {
   sendLogEmbed(member.guild, leaveEmbed(member));
 });
+client.on("guildMemberAdd", async (member) => {
+  try {
+    const welcomeChannelId = "1456962809425559613";
+    const verifyChannelId = "1462386529765691473";
+
+    const welcomeChannel = await member.guild.channels.fetch(welcomeChannelId).catch(() => null);
+    if (!welcomeChannel || !welcomeChannel.isTextBased()) return;
+
+    const embed = new EmbedBuilder()
+      .setTitle("👋 Welcome!")
+      .setDescription(
+        `Welcome to the server, <@${member.id}>!\n\n` +
+        `Please head to <#${verifyChannelId}> to verify and get started.`
+      )
+      .setColor(0x2ecc71)
+      .setThumbnail(member.user.displayAvatarURL())
+      .setTimestamp();
+
+    await welcomeChannel.send({
+      content: `<@${member.id}>`,
+      embeds: [embed],
+      allowedMentions: { users: [member.id] },
+    }).catch(() => {});
+  } catch (err) {
+    console.error("guildMemberAdd error:", err?.stack || err);
+  }
+});
 
 // ====== READY ======
 client.once("ready", () => {
@@ -241,3 +268,4 @@ if (!token) {
   process.exit(1);
 }
 client.login(token).catch(console.error);
+
