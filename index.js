@@ -19,6 +19,8 @@ const VERIFIED_ROLE = "Verified";
 const OLD_ROLE_TO_REMOVE = "Unverified";
 const VERIFY_CHANNEL_ID = "1462386529765691473";
 const LOG_CHANNEL_ID = "1456955298597175391";
+const WELCOME_CHANNEL_ID = "1456962809425559613";
+
 // ====================
 
 // userId -> code
@@ -268,4 +270,5 @@ if (!token) {
   process.exit(1);
 }
 client.login(token).catch(console.error);
+
 
