@@ -5,13 +5,14 @@ const {
   GatewayIntentBits,
   EmbedBuilder,
   AttachmentBuilder,
-  PermissionsBitField
+  PermissionsBitField,
 } = require("discord.js");
 const path = require("path");
 const fs = require("fs");
 
 // ---- fetch support (Node 18+ has global fetch; fallback just in case) ----
-const fetchFn = global.fetch || ((...args) => import("undici").then(m => m.fetch(...args)));
+const fetchFn =
+  global.fetch || ((...args) => import("undici").then((m) => m.fetch(...args)));
 
 // ====== CONFIG ======
 const PREFIX = "!";
@@ -21,6 +22,7 @@ const VERIFY_CHANNEL_ID = "1462386529765691473";
 const LOG_CHANNEL_ID = "1456955298597175391";
 const WELCOME_CHANNEL_ID = "1456962809425559613";
 // ====================
+
 // ====== INVITE TRACKING STORAGE ======
 const INVITES_FILE = path.join(__dirname, "invites.json");
 
@@ -50,12 +52,33 @@ function makeCode() {
 }
 
 async function fetchHabboMotto(name) {
-  const res = await fetchFn(
-    `https://www.habbo.com/api/public/users?name=${encodeURIComponent(name)}`
-  );
-  if (!res.ok) throw new Error("Habbo user not found");
-  const data = await res.json();
-  return (data.motto || "").trim();
+  const base = "https://www.habbo.com";
+  const url = `${base}/api/public/users?name=${encodeURIComponent(name)}`;
+
+  const controller = new AbortController();
+  const t = setTimeout(() => controller.abort(), 8000);
+
+  try {
+    const res = await fetchFn(url, {
+      signal: controller.signal,
+      headers: {
+        Accept: "application/json",
+        "User-Agent": "VerifierBot/1.0",
+      },
+    });
+
+    if (res.status === 404) throw new Error("Habbo user not found on habbo.com.");
+    if (res.status === 429) throw new Error("Too many requests. Try again in a moment.");
+    if (!res.ok) throw new Error(`Habbo API error (${res.status}).`);
+
+    const data = await res.json();
+    return (data?.motto || "").trim();
+  } catch (err) {
+    if (err.name === "AbortError") throw new Error("Habbo API timed out. Try again.");
+    throw err;
+  } finally {
+    clearTimeout(t);
+  }
 }
 
 function sendLogEmbed(guild, embed) {
@@ -68,7 +91,7 @@ function sendLogEmbed(guild, embed) {
 function verifiedEmbed(userId, habboName) {
   return new EmbedBuilder()
     .setTitle("✅ User Verified")
-    .setColor(0x57F287)
+    .setColor(0x57f287)
     .addFields(
       { name: "User", value: `<@${userId}>`, inline: true },
       { name: "Habbo Name", value: habboName, inline: true }
@@ -79,7 +102,7 @@ function verifiedEmbed(userId, habboName) {
 function joinEmbed(member) {
   return new EmbedBuilder()
     .setTitle("✅ Member Joined")
-    .setColor(0x57F287)
+    .setColor(0x57f287)
     .setDescription(`<@${member.user.id}> joined the server.`)
     .addFields(
       { name: "User", value: member.user.tag, inline: true },
@@ -91,7 +114,7 @@ function joinEmbed(member) {
 function leaveEmbed(member) {
   return new EmbedBuilder()
     .setTitle("🚪 Member Left")
-    .setColor(0xED4245)
+    .setColor(0xed4245)
     .setDescription(`<@${member.user.id}> left the server.`)
     .addFields(
       { name: "User", value: member.user.tag, inline: true },
@@ -99,6 +122,7 @@ function leaveEmbed(member) {
     )
     .setTimestamp();
 }
+
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
@@ -118,7 +142,11 @@ async function cacheGuildInvites(guild) {
     invites.forEach((inv) => map.set(inv.code, inv.uses ?? 0));
     invitesCache.set(guild.id, map);
   } catch (e) {
-    console.warn("⚠️ Could not fetch invites for guild:", guild.id, e?.message || e);
+    console.warn(
+      "⚠️ Could not fetch invites for guild:",
+      guild.id,
+      e?.message || e
+    );
   }
 }
 
@@ -176,11 +204,15 @@ client.on("guildMemberAdd", async (member) => {
 
   // 3) Welcome message (with inviter)
   try {
-    const welcomeChannel = await member.guild.channels.fetch(WELCOME_CHANNEL_ID).catch(() => null);
+    const welcomeChannel = await member.guild.channels
+      .fetch(WELCOME_CHANNEL_ID)
+      .catch(() => null);
     if (!welcomeChannel || !welcomeChannel.isTextBased()) return;
 
     const invitedLine = inviterId
-      ? `👤 **Invited by:** <@${inviterId}>${inviteCodeUsed ? ` (code: \`${inviteCodeUsed}\`)` : ""}`
+      ? `👤 **Invited by:** <@${inviterId}>${
+          inviteCodeUsed ? ` (code: \`${inviteCodeUsed}\`)` : ""
+        }`
       : `👤 **Invited by:** _(unknown)_`;
 
     const embed = new EmbedBuilder()
@@ -218,7 +250,6 @@ client.once("ready", async () => {
   }
 });
 
-
 // ====== COMMANDS ======
 client.on("messageCreate", async (msg) => {
   try {
@@ -231,7 +262,7 @@ client.on("messageCreate", async (msg) => {
 
     console.log("CMD:", cmd, "FROM:", msg.author.tag, "IN:", msg.channel?.name);
 
-      // ---- PING (test) ----
+    // ---- PING (test) ----
     if (cmd === "ping") {
       return msg.reply("pong ✅");
     }
@@ -253,18 +284,18 @@ client.on("messageCreate", async (msg) => {
 
       if (!entries.length) return msg.reply("No invites tracked yet.");
 
-      const lines = entries.map((x, i) => `**${i + 1}.** <@${x.uid}> — **${x.count}**`);
+      const lines = entries.map(
+        (x, i) => `**${i + 1}.** <@${x.uid}> — **${x.count}**`
+      );
 
       const embed = new EmbedBuilder()
         .setTitle("🏆 Invite Leaderboard")
         .setDescription(lines.join("\n"))
-        .setColor(0x5865F2)
+        .setColor(0x5865f2)
         .setTimestamp();
 
       return msg.reply({ embeds: [embed] });
     }
-
-
 
     // ---- GETCODE (DMs the user their code) ----
     if (cmd === "getcode") {
@@ -274,8 +305,8 @@ client.on("messageCreate", async (msg) => {
       try {
         await msg.author.send(
           `✅ Your verification code is: **${code}**\n\n` +
-          `Now set your Habbo motto to include that code, then come back and type:\n` +
-          `\`${PREFIX}verify YourHabboName\``
+            `Now set your Habbo motto to include that code, then come back and type:\n` +
+            `\`${PREFIX}verify YourHabboName\``
         );
         return msg.reply("📩 I’ve sent your code in DMs! Check your messages.");
       } catch {
@@ -288,12 +319,16 @@ client.on("messageCreate", async (msg) => {
     // ---- VERIFY INSTRUCTIONS (posts embed + image, then pins) ----
     if (cmd === "verifymsg") {
       if (!msg.member.permissions.has(PermissionsBitField.Flags.ManageGuild)) {
-        return msg.reply("❌ You need **Manage Server** to post the verification message.");
+        return msg.reply(
+          "❌ You need **Manage Server** to post the verification message."
+        );
       }
 
       const channel = msg.guild.channels.cache.get(VERIFY_CHANNEL_ID);
       if (!channel || !channel.isTextBased()) {
-        return msg.reply("❌ I can't find the verification channel. Check VERIFY_CHANNEL_ID.");
+        return msg.reply(
+          "❌ I can't find the verification channel. Check VERIFY_CHANNEL_ID."
+        );
       }
 
       const imagePath = path.join(__dirname, "assets", "verify-guide.png");
@@ -301,7 +336,9 @@ client.on("messageCreate", async (msg) => {
         return msg.reply("❌ Image not found. Put it in `assets/verify-guide.png`.");
       }
 
-      const attachment = new AttachmentBuilder(imagePath, { name: "verify-guide.png" });
+      const attachment = new AttachmentBuilder(imagePath, {
+        name: "verify-guide.png",
+      });
 
       const embed = new EmbedBuilder()
         .setTitle("🔐 Server Verification")
@@ -319,7 +356,7 @@ client.on("messageCreate", async (msg) => {
           ].join("\n")
         )
         .setImage("attachment://verify-guide.png")
-        .setColor(0x5865F2);
+        .setColor(0x5865f2);
 
       const sent = await channel.send({ embeds: [embed], files: [attachment] });
 
@@ -327,7 +364,9 @@ client.on("messageCreate", async (msg) => {
         await sent.pin();
         return msg.reply("✅ Posted + pinned the verification instructions in #verify.");
       } catch {
-        return msg.reply("✅ Posted the verification message, but I couldn't pin it (need **Manage Messages**).");
+        return msg.reply(
+          "✅ Posted the verification message, but I couldn't pin it (need **Manage Messages**)."
+        );
       }
     }
 
@@ -344,24 +383,35 @@ client.on("messageCreate", async (msg) => {
       try {
         const motto = await fetchHabboMotto(name);
 
+        if (!motto) {
+          return msg.reply(
+            `I found the account, but the motto came back empty.\n` +
+              `Make sure the motto is set and try again in 10–30 seconds.`
+          );
+        }
+
         const norm = (s) => (s || "").trim().replace(/\s+/g, " ");
         if (!norm(motto).includes(norm(code))) {
           return msg.reply(
             `Motto doesn't match yet.\n` +
-            `Expected to include: **${code}**\n` +
-            `Found motto: **${motto || "(empty)"}**\n\n` +
-            `Tip: wait 10-30 seconds after changing your motto, then try again.`
+              `Expected to include: **${code}**\n` +
+              `Found motto: **${motto || "(empty)"}**\n\n` +
+              `Tip: wait 10-30 seconds after changing your motto, then try again.`
           );
         }
 
         const member = await msg.guild.members.fetch(msg.author.id);
 
-        const verifiedRole = msg.guild.roles.cache.find(r => r.name === VERIFIED_ROLE);
+        const verifiedRole = msg.guild.roles.cache.find(
+          (r) => r.name === VERIFIED_ROLE
+        );
         if (!verifiedRole) return msg.reply("Verified role not found.");
 
         await member.roles.add(verifiedRole);
 
-        const oldRole = msg.guild.roles.cache.find(r => r.name === OLD_ROLE_TO_REMOVE);
+        const oldRole = msg.guild.roles.cache.find(
+          (r) => r.name === OLD_ROLE_TO_REMOVE
+        );
         if (oldRole) await member.roles.remove(oldRole).catch(() => {});
 
         if (member.manageable) {
@@ -388,6 +438,3 @@ if (!token) {
   process.exit(1);
 }
 client.login(token).catch(console.error);
-
-
-
