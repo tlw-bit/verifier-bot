@@ -310,6 +310,7 @@ client.once("ready", async () => {
     await cacheGuildInvites(guild);
   }
 });
+
 // ===================== CHUNK 3/4 =====================
 // ====== XP STORAGE ======
 function loadXpDataSafe() {
@@ -907,3 +908,4 @@ if (!token) {
   process.exit(1);
 }
 client.login(token).catch(console.error);
+
