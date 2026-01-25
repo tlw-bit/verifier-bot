@@ -8,6 +8,7 @@ const {
   AttachmentBuilder,
   PermissionsBitField,
 } = require("discord.js");
+
 const path = require("path");
 const fs = require("fs");
 const { createCanvas, loadImage } = require("canvas");
@@ -20,6 +21,7 @@ const fetchFn =
 const PREFIX = "!";
 const VERIFIED_ROLE = "Verified";
 const OLD_ROLE_TO_REMOVE = "Unverified";
+
 const VERIFY_CHANNEL_ID = "1462386529765691473";
 const LOG_CHANNEL_ID = "1456955298597175391";
 const WELCOME_CHANNEL_ID = "1456962809425559613";
@@ -36,43 +38,42 @@ const XP_BLOCKED_CHANNEL_IDS = ["1462386529765691473"]; // e.g. ["999"]
 const XP_MIN = 10;
 const XP_MAX = 20;
 const XP_COOLDOWN_SECONDS = 60;
-const PRESTIGE_AT_LEVEL = 50;     // prestige when reaching this level
-const PRESTIGE_RESET_LEVEL = 1;   // new level after prestige
-const PRESTIGE_RESET_XP = 0;      // xp after prestige
+
+const PRESTIGE_AT_LEVEL = 50; // prestige when reaching this level
+const PRESTIGE_RESET_LEVEL = 1; // new level after prestige
+const PRESTIGE_RESET_XP = 0; // xp after prestige
 
 // Where to announce level-ups (optional). Leave "" to announce in the same channel.
 const LEVEL_UP_CHANNEL_ID = "1456967580299559066";
 
 // Optional level roles: level -> roleId
 const LEVEL_ROLES = {
-  2: "1462479094859038773",  // Pool’s Closed
-  5: "1462479797304295535",  // Chair Rotator (PRO)
-  8: "1462480092910587925",  // Fake HC Member
-  12:"1462480383328129075",  // HC Member (Trust Me)
-  16:"1462480917322010715",  // Coin Beggar
-  20:"1462480684496060728",  // Club NX Bouncer
-  25:"1462481138546381127",  // Dancefloor Menace
-  30:"1462481539391684760",  // Definitely Legit
-  40:"1462478268199600129",  // Touch Grass Challenge Failed
-  50:"1462478548961857844",  // Hotel Legend (Unemployed)
+  2: "1462479094859038773", // Pool’s Closed
+  5: "1462479797304295535", // Chair Rotator (PRO)
+  8: "1462480092910587925", // Fake HC Member
+  12: "1462480383328129075", // HC Member (Trust Me)
+  16: "1462480917322010715", // Coin Beggar
+  20: "1462480684496060728", // Club NX Bouncer
+  25: "1462481138546381127", // Dancefloor Menace
+  30: "1462481539391684760", // Definitely Legit
+  40: "1462478268199600129", // Touch Grass Challenge Failed
+  50: "1462478548961857844", // Hotel Legend (Unemployed)
 };
 
 // ====== RANK CARD: ROLE ACCENT COLOURS ======
-// roleId -> hex colour
 const ROLE_ACCENTS = {
-  "1462479094859038773": "#facc15", // lvl 2
-  "1462479797304295535": "#d97706", // lvl 5
-  "1462480092910587925": "#3b82f6", // lvl 8
-  "1462480383328129075": "#22c55e", // lvl 12
-  "1462480917322010715": "#f59e0b", // lvl 16
-  "1462480684496060728": "#a855f7", // lvl 20
-  "1462481138546381127": "#ec4899", // lvl 25
-  "1462481539391684760": "#10b981", // lvl 30
-  "1462478268199600129": "#16a34a", // lvl 40
-  "1462478548961857844": "#38bdf8", // lvl 50
+  "1462479094859038773": "#facc15",
+  "1462479797304295535": "#d97706",
+  "1462480092910587925": "#3b82f6",
+  "1462480383328129075": "#22c55e",
+  "1462480917322010715": "#f59e0b",
+  "1462480684496060728": "#a855f7",
+  "1462481138546381127": "#ec4899",
+  "1462481539391684760": "#10b981",
+  "1462478268199600129": "#16a34a",
+  "1462478548961857844": "#38bdf8",
 };
 
-// fallback accent if no mapped roles are found
 const DEFAULT_ACCENT = "#5865f2";
 
 // ====== INVITE TRACKING STORAGE ======
@@ -95,9 +96,8 @@ function saveInvitesData(obj) {
 
 let invitesData = loadInvitesDataSafe();
 
-// userId -> Habbo verification code
+// ====== VERIFICATION PENDING CODES (GLOBAL) ======
 const pending = new Map();
-
 function makeCode() {
   return "verify-" + Math.random().toString(36).slice(2, 8).toUpperCase();
 }
@@ -147,6 +147,7 @@ async function fetchHabboMotto(name) {
   }
 }
 
+// ====== LOG EMBEDS ======
 function sendLogEmbed(guild, embed) {
   if (!LOG_CHANNEL_ID) return;
   const channel = guild.channels.cache.get(LOG_CHANNEL_ID);
@@ -189,6 +190,7 @@ function leaveEmbed(member) {
     .setTimestamp();
 }
 
+// ====== CLIENT ======
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
@@ -208,7 +210,11 @@ async function cacheGuildInvites(guild) {
     invites.forEach((inv) => map.set(inv.code, inv.uses ?? 0));
     invitesCache.set(guild.id, map);
   } catch (e) {
-    console.warn("⚠️ Could not fetch invites for guild:", guild.id, e?.message || e);
+    console.warn(
+      "⚠️ Could not fetch invites for guild:",
+      guild.id,
+      e?.message || e
+    );
   }
 }
 
@@ -299,12 +305,13 @@ client.on("guildMemberRemove", (member) => {
 // ====== READY ======
 client.once("ready", async () => {
   console.log(`✅ Logged in as ${client.user.tag}`);
+
   for (const guild of client.guilds.cache.values()) {
     await cacheGuildInvites(guild);
   }
 });
 // ===================== CHUNK 3/4 =====================
-// ====== XP / LEVELING STORAGE ======
+// ====== XP STORAGE ======
 function loadXpDataSafe() {
   if (!fs.existsSync(XP_FILE)) return { users: {} };
   try {
@@ -324,42 +331,46 @@ let xpData = loadXpDataSafe();
 
 function ensureXpUser(userId) {
   if (!xpData.users[userId]) {
-    xpData.users[userId] = {
-      xp: 0,
-      level: 1,
-      prestige: 0,      // ✅ NEW
-      lastXpAt: 0,
-    };
+    xpData.users[userId] = { xp: 0, level: 1, prestige: 0, lastXpAt: 0 };
   } else {
-    // ✅ Backwards compatible: add prestige to old saves
     if (typeof xpData.users[userId].prestige !== "number") xpData.users[userId].prestige = 0;
   }
   return xpData.users[userId];
 }
 
-
 // XP curve
 function xpNeeded(level) {
   return 100 + (level - 1) * 50;
 }
+
+// ====== SLASH COMMAND: /level (ONLY) ======
 client.on("interactionCreate", async (interaction) => {
-  if (!interaction.isChatInputCommand()) return;
-  if (interaction.commandName !== "levels") return;
+  try {
+    if (!interaction.isChatInputCommand()) return;
+    if (interaction.commandName !== "level") return;
 
-  const u = interaction.options.getUser("user") || interaction.user;
-  const userObj = ensureXpUser(u.id);
-  const needed = xpNeeded(userObj.level);
+    const u = interaction.options.getUser("user") || interaction.user;
+    const userObj = ensureXpUser(u.id);
+    const needed = xpNeeded(userObj.level);
 
-  await interaction.reply(
-    `📈 <@${u.id}> is **Level ${userObj.level}** (Prestige **${userObj.prestige || 0}**)\n` +
-    `XP: **${userObj.xp}/${needed}**`
-  );
+    return interaction.reply(
+      `📈 <@${u.id}> is **Level ${userObj.level}**` +
+        (userObj.prestige ? ` (⭐ Prestige **${userObj.prestige}**)` : "") +
+        `\nXP: **${userObj.xp}/${needed}**`
+    );
+  } catch (err) {
+    console.error("interactionCreate /level error:", err);
+    if (interaction.isRepliable() && !interaction.replied) {
+      await interaction.reply({ content: "Something went wrong 😬", ephemeral: true }).catch(() => {});
+    }
+  }
 });
 
 function shouldAwardXp(channelId) {
   const cid = String(channelId);
   if (XP_BLOCKED_CHANNEL_IDS.map(String).includes(cid)) return false;
-  if (XP_ALLOWED_CHANNEL_IDS.length > 0 && !XP_ALLOWED_CHANNEL_IDS.map(String).includes(cid)) return false;
+  if (XP_ALLOWED_CHANNEL_IDS.length > 0 && !XP_ALLOWED_CHANNEL_IDS.map(String).includes(cid))
+    return false;
   return true;
 }
 
@@ -368,27 +379,6 @@ function randInt(min, max) {
   const b = Math.floor(max);
   return Math.floor(Math.random() * (b - a + 1)) + a;
 }
-client.on("interactionCreate", async (interaction) => {
-  try {
-    if (!interaction.isChatInputCommand()) return;
-    if (interaction.commandName !== "levels") return;
-
-    const u = interaction.options.getUser("user") || interaction.user;
-    const userObj = ensureXpUser(u.id);
-    const needed = xpNeeded(userObj.level);
-
-    await interaction.reply(
-      `📈 <@${u.id}> is **Level ${userObj.level}**\n` +
-      `XP: **${userObj.xp}/${needed}**` +
-      (userObj.prestige ? `\n⭐ Prestige: **${userObj.prestige}**` : "")
-    );
-  } catch (e) {
-    console.error("interactionCreate error:", e);
-    if (interaction.isRepliable() && !interaction.replied) {
-      await interaction.reply({ content: "Something went wrong 😬", ephemeral: true }).catch(() => {});
-    }
-  }
-});
 
 // Global rank: order by level desc, then xp desc
 function getGlobalRank(userId) {
@@ -408,12 +398,10 @@ function getInviteCount(userId) {
 function pickAccentForMember(member) {
   if (!member) return DEFAULT_ACCENT;
 
-  // If they have any of the level roles, use that accent colour
   for (const [roleId, hex] of Object.entries(ROLE_ACCENTS)) {
     if (member.roles.cache.has(roleId)) return hex;
   }
 
-  // Fallback: highest coloured role in Discord
   const coloured = member.roles.cache
     .filter((r) => r.color && r.color !== 0)
     .sort((a, b) => b.position - a.position)
@@ -422,6 +410,7 @@ function pickAccentForMember(member) {
   return coloured?.hexColor || DEFAULT_ACCENT;
 }
 
+// ====== RANK CARD DRAW HELPERS ======
 function roundRect(ctx, x, y, w, h, r) {
   const radius = Math.min(r, w / 2, h / 2);
   ctx.beginPath();
@@ -473,20 +462,16 @@ async function generateRankCard(member, userObj) {
   const { rank, total } = getGlobalRank(user.id);
   const invites = getInviteCount(user.id);
 
-  // Background
   ctx.fillStyle = "#0b1220";
   ctx.fillRect(0, 0, width, height);
 
-  // Card panel
   ctx.fillStyle = "#0f172a";
   roundRect(ctx, 18, 18, width - 36, height - 36, 18);
   ctx.fill();
 
-  // Accent strip
   ctx.fillStyle = accent;
   ctx.fillRect(18, 18, width - 36, 8);
 
-  // Avatar
   const avatarURL = user.displayAvatarURL({ extension: "png", size: 256 });
   const avatar = await loadImage(avatarURL);
 
@@ -498,57 +483,47 @@ async function generateRankCard(member, userObj) {
   ctx.drawImage(avatar, 54, 73, 136, 136);
   ctx.restore();
 
-  // Name
   ctx.fillStyle = "#ffffff";
   ctx.font = "bold 34px Sans";
   ctx.fillText(user.username, 220, 108);
 
- // Tag line + Prestige badge
-const prestige = Number(userObj.prestige || 0);
+  const prestige = Number(userObj.prestige || 0);
 
-const rowX = 220;
-const rowY = 140;
+  const rowX = 220;
+  const rowY = 140;
+  let afterPillX = rowX;
 
-// Prestige pill (hide it if prestige is 0)
-let afterPillX = rowX;
+  if (prestige > 0) {
+    const pillH = 26;
+    const pillY = rowY - 18;
+    const prestigeText = `⭐ PRESTIGE ${prestige}`;
 
-if (prestige > 0) {
-  const pillH = 26;
-  const pillY = rowY - 18;
-  const prestigeText = `⭐ PRESTIGE ${prestige}`;
+    ctx.font = "bold 14px Sans";
+    const textPadX = 14;
+    const pillW = Math.max(120, Math.ceil(ctx.measureText(prestigeText).width) + textPadX * 2);
 
-  ctx.font = "bold 14px Sans";
-  const textPadX = 14;
-  const pillW = Math.max(
-    120,
-    Math.ceil(ctx.measureText(prestigeText).width) + textPadX * 2
-  );
+    drawPill(ctx, rowX, pillY, pillW, pillH, "#111827", accent);
 
-  drawPill(ctx, rowX, pillY, pillW, pillH, "#111827", accent);
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "bold 14px Sans";
+    ctx.fillText(prestigeText, rowX + textPadX, pillY + 18);
 
-  ctx.fillStyle = "#ffffff";
-  ctx.font = "bold 14px Sans";
-  ctx.fillText(prestigeText, rowX + textPadX, pillY + 18);
+    afterPillX = rowX + pillW + 16;
+  }
 
-  afterPillX = rowX + pillW + 16;
-}
-
-// Rest of line
-const restText = `Level ${userObj.level} • ${userObj.xp}/${needed} XP`;
-const maxRestWidth = width - 36 - afterPillX - 20;
-const restSize = fitText(ctx, restText, maxRestWidth, 18, "Sans");
+  const restText = `Level ${userObj.level} • ${userObj.xp}/${needed} XP`;
+  const maxRestWidth = width - 36 - afterPillX - 20;
+  const restSize = fitText(ctx, restText, maxRestWidth, 18, "Sans");
 
   ctx.fillStyle = "#94a3b8";
   ctx.font = `${restSize}px Sans`;
-  ctx.fillText(restText, rowX + pillW + 16, rowY);
+  ctx.fillText(restText, afterPillX, rowY);
 
-  // Global rank + invites
   ctx.fillStyle = "#e5e7eb";
   ctx.font = "18px Sans";
   ctx.fillText(`🏆 #${rank} / ${total}`, 220, 172);
   ctx.fillText(`🎟️ Invites: ${invites}`, 220, 198);
 
-  // XP bar bg
   const barX = 220;
   const barY = 220;
   const barW = 680;
@@ -558,12 +533,10 @@ const restSize = fitText(ctx, restText, maxRestWidth, 18, "Sans");
   roundRect(ctx, barX, barY, barW, barH, 12);
   ctx.fill();
 
-  // XP bar fill
   ctx.fillStyle = accent;
   roundRect(ctx, barX, barY, Math.max(10, barW * progress), barH, 12);
   ctx.fill();
 
-  // XP % text
   ctx.fillStyle = "#0b1220";
   ctx.font = "bold 14px Sans";
   const pct = Math.round(progress * 100);
@@ -572,16 +545,17 @@ const restSize = fitText(ctx, restText, maxRestWidth, 18, "Sans");
   return canvas.toBuffer();
 }
 
-
-// ---------- LEVEL ROLES + LEVEL-UP ANNOUNCEMENTS ----------
+// ====== LEVEL ROLES + ANNOUNCEMENTS ======
 function getLevelRolePairsSorted(guild) {
   return Object.entries(LEVEL_ROLES)
     .map(([lvl, roleId]) => ({ lvl: Number(lvl), roleId: String(roleId) }))
-    .filter((x) => Number.isFinite(x.lvl) && x.lvl > 0 && x.roleId && guild.roles.cache.get(x.roleId))
+    .filter(
+      (x) =>
+        Number.isFinite(x.lvl) && x.lvl > 0 && x.roleId && guild.roles.cache.get(x.roleId)
+    )
     .sort((a, b) => a.lvl - b.lvl);
 }
 
-// Removes old level roles, keeps ONLY the correct one
 async function applyLevelRoles(member, level) {
   const pairs = getLevelRolePairsSorted(member.guild);
   if (!pairs.length) return;
@@ -601,17 +575,14 @@ async function applyLevelRoles(member, level) {
 
   const rolesToRemove = allLevelRoleIds.filter((id) => id !== targetRoleId);
   if (rolesToRemove.length) await member.roles.remove(rolesToRemove).catch(() => {});
-
-  if (!member.roles.cache.has(targetRoleId)) {
-    await member.roles.add(targetRoleId).catch(() => {});
-  }
+  if (!member.roles.cache.has(targetRoleId)) await member.roles.add(targetRoleId).catch(() => {});
 }
 
 function cringeLevelUpLine(level, userMention) {
   const lines = {
-    2:  `🚧 ${userMention} unlocked **Pool’s Closed**. Lifeguard is imaginary.`,
-    5:  `🪑 ${userMention} is now **Chair Rotator (PRO)**. Spin responsibly.`,
-    8:  `🧢 ${userMention} achieved **Fake HC Member**. Badge? Never heard of it.`,
+    2: `🚧 ${userMention} unlocked **Pool’s Closed**. Lifeguard is imaginary.`,
+    5: `🪑 ${userMention} is now **Chair Rotator (PRO)**. Spin responsibly.`,
+    8: `🧢 ${userMention} achieved **Fake HC Member**. Badge? Never heard of it.`,
     12: `🧃 ${userMention} unlocked **HC Member (Trust Me)**. Source: “trust me”.`,
     16: `🪙 🚨 WARNING: ${userMention} has reached **Coin Beggar** status.`,
     20: `🚪 ${userMention} promoted to **Club NX Bouncer**. Pay: exposure.`,
@@ -633,13 +604,10 @@ async function announceLevelUp(guild, fallbackChannel, user, newLevel) {
     const ch =
       guild.channels.cache.get(LEVEL_UP_CHANNEL_ID) ||
       (await guild.channels.fetch(LEVEL_UP_CHANNEL_ID).catch(() => null));
-
     if (ch && ch.isTextBased()) targetChannel = ch;
   }
 
-  if (targetChannel) {
-    await targetChannel.send({ content: line }).catch(() => {});
-  }
+  if (targetChannel) await targetChannel.send({ content: line }).catch(() => {});
 }
 
 async function processLevelUps({ guild, channel, userObj, userDiscord, member }) {
@@ -647,7 +615,7 @@ async function processLevelUps({ guild, channel, userObj, userDiscord, member })
     userObj.xp -= xpNeeded(userObj.level);
     userObj.level += 1;
 
-    // ✅ PRESTIGE check
+    // PRESTIGE check
     if (userObj.level >= PRESTIGE_AT_LEVEL) {
       userObj.prestige = Number(userObj.prestige || 0) + 1;
 
@@ -655,49 +623,40 @@ async function processLevelUps({ guild, channel, userObj, userDiscord, member })
       userObj.level = PRESTIGE_RESET_LEVEL;
       userObj.xp = PRESTIGE_RESET_XP;
 
-      // OPTIONAL: announce "hit level 50" first (delete if you want only 1 message)
+      // announce the level 50 line
       await announceLevelUp(guild, channel, userDiscord, PRESTIGE_AT_LEVEL).catch(() => {});
 
-      // Send prestige message to level-up channel (if set), otherwise current channel
+      // prestige message
       const userMention = `<@${userDiscord.id}>`;
       const prestigeMsg =
         `🏨✨ ${userMention} hit **Level ${PRESTIGE_AT_LEVEL}** and unlocked ` +
         `**PRESTIGE ${userObj.prestige}**! Back to Level ${PRESTIGE_RESET_LEVEL} we go.`;
 
       let targetChannel = channel;
-
       if (LEVEL_UP_CHANNEL_ID) {
         const ch =
           guild.channels.cache.get(LEVEL_UP_CHANNEL_ID) ||
           (await guild.channels.fetch(LEVEL_UP_CHANNEL_ID).catch(() => null));
         if (ch && ch.isTextBased()) targetChannel = ch;
       }
+      if (targetChannel) await targetChannel.send({ content: prestigeMsg }).catch(() => {});
 
-      if (targetChannel) {
-        await targetChannel.send({ content: prestigeMsg }).catch(() => {});
-      }
-
-      // remove ALL level roles (since they're back to level 1)
+      // remove all level roles (back to level 1)
       if (member) {
         const pairs = getLevelRolePairsSorted(member.guild);
         const allLevelRoleIds = pairs.map((p) => p.roleId);
-        if (allLevelRoleIds.length) {
-          await member.roles.remove(allLevelRoleIds).catch(() => {});
-        }
+        if (allLevelRoleIds.length) await member.roles.remove(allLevelRoleIds).catch(() => {});
       }
 
-      // Important: stop looping this prestige cycle (xp is reset anyway)
       break;
     }
 
-    // normal level-up
     await announceLevelUp(guild, channel, userDiscord, userObj.level).catch(() => {});
     if (member) await applyLevelRoles(member, userObj.level).catch(() => {});
   }
 }
-
 // ===================== CHUNK 4/4 =====================
-// ====== COMMANDS + XP ======
+// ====== COMMANDS + XP (PREFIX) ======
 client.on("messageCreate", async (msg) => {
   try {
     if (msg.author.bot) return;
@@ -705,7 +664,7 @@ client.on("messageCreate", async (msg) => {
 
     const isCommand = msg.content.startsWith(PREFIX);
 
-    // ====== XP AWARDING (runs on non-command messages) ======
+    // XP awarding (non-command messages)
     if (!isCommand && shouldAwardXp(msg.channel.id)) {
       const userObj = ensureXpUser(msg.author.id);
       const now = Date.now();
@@ -734,8 +693,6 @@ client.on("messageCreate", async (msg) => {
     const args = msg.content.slice(PREFIX.length).trim().split(/\s+/);
     const cmd = (args.shift() || "").toLowerCase();
 
-    console.log("CMD:", cmd, "FROM:", msg.author.tag, "IN:", msg.channel?.name);
-
     // ---- XP commands ----
     if (cmd === "level" || cmd === "xp") {
       const u = msg.mentions.users.first() || msg.author;
@@ -743,21 +700,26 @@ client.on("messageCreate", async (msg) => {
       const needed = xpNeeded(userObj.level);
 
       return msg.reply(
-        `📈 <@${u.id}> is **Level ${userObj.level}**\n` +
+        `📈 <@${u.id}> is **Level ${userObj.level}** (Prestige **${userObj.prestige || 0}**)\n` +
           `XP: **${userObj.xp}/${needed}**`
       );
     }
 
     if (cmd === "xpleaderboard" || cmd === "lblevel") {
       const entries = Object.entries(xpData.users || {})
-        .map(([uid, u]) => ({ uid, level: Number(u.level) || 1, xp: Number(u.xp) || 0 }))
-        .sort((a, b) => (b.level - a.level) || (b.xp - a.xp))
+        .map(([uid, u]) => ({
+          uid,
+          level: Number(u.level) || 1,
+          prestige: Number(u.prestige) || 0,
+          xp: Number(u.xp) || 0,
+        }))
+        .sort((a, b) => (b.prestige - a.prestige) || (b.level - a.level) || (b.xp - a.xp))
         .slice(0, 20);
 
       if (!entries.length) return msg.reply("No XP data yet.");
 
       const lines = entries.map(
-        (x, i) => `**${i + 1}.** <@${x.uid}> — **Lvl ${x.level}** (${x.xp}xp)`
+        (x, i) => `**${i + 1}.** <@${x.uid}> — **P${x.prestige} Lvl ${x.level}** (${x.xp}xp)`
       );
 
       const embed = new EmbedBuilder()
@@ -769,7 +731,7 @@ client.on("messageCreate", async (msg) => {
       return msg.reply({ embeds: [embed] });
     }
 
-    // ---- Rank card (MEE6-style) ----
+    // ---- Rank card ----
     if (cmd === "rank" || cmd === "card") {
       const u = msg.mentions.users.first() || msg.author;
       const member = await msg.guild.members.fetch(u.id).catch(() => null);
@@ -816,6 +778,7 @@ client.on("messageCreate", async (msg) => {
       return msg.reply({ embeds: [embed] });
     }
 
+    // ---- Verification flow ----
     if (cmd === "getcode") {
       const code = makeCode();
       pending.set(msg.author.id, code);
@@ -938,11 +901,9 @@ client.on("messageCreate", async (msg) => {
 });
 
 // ====== LOGIN (exactly once) ======
-const token = (process.env.DISCORD_TOKEN || "").trim();
+const token = String(process.env.DISCORD_TOKEN || "").trim();
 if (!token) {
   console.error("❌ No DISCORD_TOKEN set in environment variables.");
   process.exit(1);
 }
 client.login(token).catch(console.error);
-
-
