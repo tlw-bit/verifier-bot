@@ -1,24 +1,55 @@
-const { REST, Routes, SlashCommandBuilder } = require("discord.js");
+const { REST, Routes, SlashCommandBuilder, PermissionFlagsBits } = require("discord.js");
 
 const commands = [
   new SlashCommandBuilder()
-    .setName("levels")
-    .setDescription("Show your level/xp (or someone else)")
-    .addUserOption(opt =>
-      opt.setName("user").setDescription("User to check").setRequired(false)
-    )
-    .toJSON(),
-];
+    .setName("level")
+    .setDescription("Show level/xp for you or someone else")
+    .addUserOption(o => o.setName("user").setDescription("User to check").setRequired(false)),
+
+  new SlashCommandBuilder()
+    .setName("rank")
+    .setDescription("Show the rank card for you or someone else")
+    .addUserOption(o => o.setName("user").setDescription("User to check").setRequired(false)),
+
+  new SlashCommandBuilder()
+    .setName("xpleaderboard")
+    .setDescription("Show the XP leaderboard"),
+
+  new SlashCommandBuilder()
+    .setName("invites")
+    .setDescription("Show invite count for you or someone else")
+    .addUserOption(o => o.setName("user").setDescription("User to check").setRequired(false)),
+
+  new SlashCommandBuilder()
+    .setName("invleaderboard")
+    .setDescription("Show the invite leaderboard"),
+
+  new SlashCommandBuilder()
+    .setName("ping")
+    .setDescription("pong ✅"),
+
+  new SlashCommandBuilder()
+    .setName("getcode")
+    .setDescription("DM me a verification code"),
+
+  new SlashCommandBuilder()
+    .setName("verify")
+    .setDescription("Verify your Habbo account via motto code")
+    .addStringOption(o => o.setName("habbo").setDescription("Your Habbo name").setRequired(true)),
+
+  new SlashCommandBuilder()
+    .setName("verifymsg")
+    .setDescription("Post + pin verification instructions (admin)")
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild),
+].map(c => c.toJSON());
 
 const rest = new REST({ version: "10" }).setToken(process.env.DISCORD_TOKEN);
 
 (async () => {
-  const clientId = process.env.CLIENT_ID; // bot application id
-  const guildId = process.env.GUILD_ID;   // your server id
+  const clientId = process.env.CLIENT_ID;
+  const guildId = process.env.GUILD_ID;
+  if (!clientId || !guildId) throw new Error("Missing CLIENT_ID or GUILD_ID env vars.");
 
-  await rest.put(Routes.applicationGuildCommands(clientId, guildId), {
-    body: commands,
-  });
-
-  console.log("✅ Deployed /levels to this guild.");
+  await rest.put(Routes.applicationGuildCommands(clientId, guildId), { body: commands });
+  console.log("✅ Deployed slash commands to guild.");
 })();
