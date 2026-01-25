@@ -342,6 +342,19 @@ function ensureXpUser(userId) {
 function xpNeeded(level) {
   return 100 + (level - 1) * 50;
 }
+client.on("interactionCreate", async (interaction) => {
+  if (!interaction.isChatInputCommand()) return;
+  if (interaction.commandName !== "levels") return;
+
+  const u = interaction.options.getUser("user") || interaction.user;
+  const userObj = ensureXpUser(u.id);
+  const needed = xpNeeded(userObj.level);
+
+  await interaction.reply(
+    `📈 <@${u.id}> is **Level ${userObj.level}** (Prestige **${userObj.prestige || 0}**)\n` +
+    `XP: **${userObj.xp}/${needed}**`
+  );
+});
 
 function shouldAwardXp(channelId) {
   const cid = String(channelId);
@@ -931,4 +944,5 @@ if (!token) {
   process.exit(1);
 }
 client.login(token).catch(console.error);
+
 
