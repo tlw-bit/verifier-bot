@@ -13,21 +13,12 @@ const commands = [
 const rest = new REST({ version: "10" }).setToken(process.env.DISCORD_TOKEN);
 
 (async () => {
-  try {
-    const clientId = process.env.CLIENT_ID; // your bot application ID
-    const guildId = process.env.GUILD_ID;   // your server ID
+  const clientId = process.env.CLIENT_ID; // bot application id
+  const guildId = process.env.GUILD_ID;   // your server id
 
-    if (!clientId || !guildId) {
-      throw new Error("Missing CLIENT_ID or GUILD_ID env vars.");
-    }
+  await rest.put(Routes.applicationGuildCommands(clientId, guildId), {
+    body: commands,
+  });
 
-    await rest.put(
-      Routes.applicationGuildCommands(clientId, guildId),
-      { body: commands }
-    );
-
-    console.log("✅ Registered /levels for this guild.");
-  } catch (err) {
-    console.error("❌ Deploy failed:", err);
-  }
+  console.log("✅ Deployed /levels to this guild.");
 })();
