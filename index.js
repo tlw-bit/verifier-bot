@@ -355,6 +355,27 @@ function randInt(min, max) {
   const b = Math.floor(max);
   return Math.floor(Math.random() * (b - a + 1)) + a;
 }
+client.on("interactionCreate", async (interaction) => {
+  try {
+    if (!interaction.isChatInputCommand()) return;
+    if (interaction.commandName !== "levels") return;
+
+    const u = interaction.options.getUser("user") || interaction.user;
+    const userObj = ensureXpUser(u.id);
+    const needed = xpNeeded(userObj.level);
+
+    await interaction.reply(
+      `📈 <@${u.id}> is **Level ${userObj.level}**\n` +
+      `XP: **${userObj.xp}/${needed}**` +
+      (userObj.prestige ? `\n⭐ Prestige: **${userObj.prestige}**` : "")
+    );
+  } catch (e) {
+    console.error("interactionCreate error:", e);
+    if (interaction.isRepliable() && !interaction.replied) {
+      await interaction.reply({ content: "Something went wrong 😬", ephemeral: true }).catch(() => {});
+    }
+  }
+});
 
 // Global rank: order by level desc, then xp desc
 function getGlobalRank(userId) {
@@ -910,3 +931,4 @@ if (!token) {
   process.exit(1);
 }
 client.login(token).catch(console.error);
+
